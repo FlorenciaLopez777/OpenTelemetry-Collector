@@ -7,18 +7,15 @@ receivers:
         endpoint: 0.0.0.0:4318
 
 processors:
-  batch: {}
+  batch:
 
 exporters:
-  debug:
-    verbosity: detailed
-  # descomenta para además exportar a archivo dentro del contenedor:
-  # file:
-  #   path: /data/otel-traces.json
+  logging:
+    loglevel: debug
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug] # o [debug, file] si activas el file exporter
+      exporters: [logging]
