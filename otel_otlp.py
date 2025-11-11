@@ -12,7 +12,7 @@ provider.add_span_processor(BatchSpanProcessor(otlp))
 tracer = trace.get_tracer("demo.e-level")
 
 with tracer.start_as_current_span("e-parent") as parent:
-    parent.set_attribute("app.FlorenciaLopez777", 123)
+    parent.set_attribute("app.user_id", 123)
     with tracer.start_as_current_span("e-child") as child:
         child.set_attribute("work.step", "otlp-export")
         child.add_event("child doing work")
