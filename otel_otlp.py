@@ -1,13 +1,15 @@
+# otel_otlp.py
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+import time
 
 provider = TracerProvider()
 trace.set_tracer_provider(provider)
 
 otlp = OTLPSpanExporter(endpoint="http://localhost:4317", insecure=True)
-provider.add_span_processor(BatchSpanProcessor(otlp))
+provider.add_span_processor(SimpleSpanProcessor(otlp))
 
 tracer = trace.get_tracer("demo.e-level")
 
@@ -19,3 +21,4 @@ with tracer.start_as_current_span("e-parent") as parent:
     parent.add_event("parent finishing")
 
 print("Spans sent via OTLP -> Collector")
+time.sleep(1)  # pequeño respiro para que el exporter termine en CI
