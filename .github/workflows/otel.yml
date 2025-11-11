@@ -38,12 +38,17 @@ jobs:
             -v "$GITHUB_WORKSPACE/otel-collector-config.yaml":/etc/otelcol-contrib/config.yaml \
             otel/opentelemetry-collector-contrib:latest
 
+      # ---- FIX #1: health-check más robusto (buscar "Everything is ready" o "Starting GRPC server")
       - name: Wait for Collector health (up to 30s)
         run: |
           for i in {1..30}; do
-            docker logs otelcol --since 1s | tee -a collector.log
-            if docker logs otelcol 2>&1 | grep -qi "Serving OTLP gRPC" ; then
-              echo "Collector is ready."
+            docker logs otelcol --since 1s || true
+            if docker logs otelcol 2>&1 | grep -qi "Everything is ready"; then
+              echo "Collector ready (Everything is ready)."
+              exit 0
+            fi
+            if docker logs otelcol 2>&1 | grep -qi "Starting GRPC server"; then
+              echo "Collector GRPC server started."
               exit 0
             fi
             sleep 1
@@ -60,16 +65,15 @@ jobs:
         run: |
           docker logs otelcol | tee collector_full.log
 
-      # Si activaste el file exporter en el YAML, copia el archivo desde el contenedor
+      # ---- FIX #2: no usar 'sh' dentro del contenedor (distroless)
+      # Este paso se ejecutará sólo si activaste el exporter 'file' en el YAML
       - name: Copy exported JSON (optional)
         if: always()
         run: |
           mkdir -p artifacts
-          # si el file exporter está activo y escribe en /data/otel-traces.json:
-          docker exec otelcol sh -c 'ls -l /data || true'
-          docker cp otelcol:/data/otel-traces.json ./artifacts/otel-traces.json 2>/dev/null || true
+          # Intentar copiar el archivo si existe en el contenedor
+          docker cp otelcol:/data/otel-traces.json ./artifacts/otel-traces.json 2>/dev/null || echo "No file exporter output found."
           cp -f app.log artifacts/app.log || true
-          cp -f collector.log artifacts/collector_start.log || true
           cp -f collector_full.log artifacts/collector_full.log || true
 
       - name: Upload artifacts
