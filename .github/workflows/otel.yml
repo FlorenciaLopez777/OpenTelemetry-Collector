@@ -1,0 +1,84 @@
+name: OpenTelemetry E-Level (Dockerized Collector)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'otel_otlp.py'
+      - 'otel-collector-config.yaml'
+      - '.github/workflows/otel.yml'
+
+jobs:
+  run-otel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install app dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp
+
+      - name: Pull Collector image
+        run: docker pull otel/opentelemetry-collector-contrib:latest
+
+      - name: Start Collector (background)
+        run: |
+          docker rm -f otelcol || true
+          docker run -d --name otelcol \
+            -p 4317:4317 -p 4318:4318 \
+            -v "$GITHUB_WORKSPACE/otel-collector-config.yaml":/etc/otelcol-contrib/config.yaml \
+            otel/opentelemetry-collector-contrib:latest
+
+      - name: Wait for Collector health (up to 30s)
+        run: |
+          for i in {1..30}; do
+            docker logs otelcol --since 1s | tee -a collector.log
+            if docker logs otelcol 2>&1 | grep -qi "Serving OTLP gRPC" ; then
+              echo "Collector is ready."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Collector did not become ready in time."
+          docker logs otelcol
+          exit 1
+
+      - name: Run Python app (send spans via OTLP)
+        run: |
+          python otel_otlp.py | tee app.log
+
+      - name: Show Collector logs (capture output)
+        run: |
+          docker logs otelcol | tee collector_full.log
+
+      # Si activaste el file exporter en el YAML, copia el archivo desde el contenedor
+      - name: Copy exported JSON (optional)
+        if: always()
+        run: |
+          mkdir -p artifacts
+          # si el file exporter está activo y escribe en /data/otel-traces.json:
+          docker exec otelcol sh -c 'ls -l /data || true'
+          docker cp otelcol:/data/otel-traces.json ./artifacts/otel-traces.json 2>/dev/null || true
+          cp -f app.log artifacts/app.log || true
+          cp -f collector.log artifacts/collector_start.log || true
+          cp -f collector_full.log artifacts/collector_full.log || true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: otel-results
+          path: artifacts
+          if-no-files-found: warn
+
+      - name: Teardown
+        if: always()
+        run: docker rm -f otelcol || true
