@@ -1,4 +1,7 @@
-   grpc:
+receivers:
+  otlp:
+    protocols:
+      grpc:
         endpoint: 0.0.0.0:4317
       http:
         endpoint: 0.0.0.0:4318
@@ -9,10 +12,13 @@ processors:
 exporters:
   debug:
     verbosity: detailed
+  # descomenta para además exportar a archivo dentro del contenedor:
+  # file:
+  #   path: /data/otel-traces.json
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug]
+      exporters: [debug] # o [debug, file] si activas el file exporter
