@@ -1,8 +1,4 @@
-# otel-collector-config.yaml
-receivers:
-  otlp:
-    protocols:
-      grpc:
+   grpc:
         endpoint: 0.0.0.0:4317
       http:
         endpoint: 0.0.0.0:4318
@@ -13,13 +9,10 @@ processors:
 exporters:
   debug:
     verbosity: detailed
-  # opcional (si luego quieres artifact JSON):
-  # file:
-  #   path: /data/otel-traces.json
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug]     # o [debug, file] si activas file
+      exporters: [debug]
