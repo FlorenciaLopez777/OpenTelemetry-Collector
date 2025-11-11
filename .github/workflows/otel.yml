@@ -38,14 +38,13 @@ jobs:
             -v "$GITHUB_WORKSPACE/otel-collector-config.yaml":/etc/otelcol-contrib/config.yaml \
             otel/opentelemetry-collector-contrib:latest
 
-      # Health-check robusto: acepta "Everything is ready" o "Starting GRPC server"
+      # ---- FIX #1: health-check más robusto (buscar "Everything is ready" o "Starting GRPC server")
       - name: Wait for Collector health (up to 30s)
-        shell: bash
         run: |
           for i in {1..30}; do
             docker logs otelcol --since 1s || true
             if docker logs otelcol 2>&1 | grep -qi "Everything is ready"; then
-              echo "Collector ready."
+              echo "Collector ready (Everything is ready)."
               exit 0
             fi
             if docker logs otelcol 2>&1 | grep -qi "Starting GRPC server"; then
@@ -62,17 +61,17 @@ jobs:
         run: |
           python otel_otlp.py | tee app.log
 
-      # Captura logs del collector con un pequeño margen temporal
       - name: Show Collector logs (capture output)
         run: |
-          sleep 2
-          docker logs otelcol --since 60s | tee collector_full.log
+          docker logs otelcol | tee collector_full.log
 
-      # Opcional: si activaste el exporter "file" en el YAML, copia el JSON
+      # ---- FIX #2: no usar 'sh' dentro del contenedor (distroless)
+      # Este paso se ejecutará sólo si activaste el exporter 'file' en el YAML
       - name: Copy exported JSON (optional)
         if: always()
         run: |
           mkdir -p artifacts
+          # Intentar copiar el archivo si existe en el contenedor
           docker cp otelcol:/data/otel-traces.json ./artifacts/otel-traces.json 2>/dev/null || echo "No file exporter output found."
           cp -f app.log artifacts/app.log || true
           cp -f collector_full.log artifacts/collector_full.log || true
